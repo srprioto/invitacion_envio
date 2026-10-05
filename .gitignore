@@ -1,0 +1,28 @@
+# --- Específico del script de WhatsApp ---
+# Carpeta con la sesión de WhatsApp Web y perfil de Chrome (contiene datos sensibles)
+whatsapp_profile/
+
+# Archivos de registro / logs de envíos
+log_envios.csv
+*.log
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# --- Entornos Virtuales y Editores ---
+.venv/
+.vscode/
+.idea/
+
+# --- Sistema Operativo ---
+.DS_Store
+Thumbs.db
