@@ -1,17 +1,3 @@
-"""
-Envío de invitaciones por WhatsApp Web (Selenium) - Windows + Chrome
-
-Instalación (una sola vez):
-    pip install selenium
-
-Uso:
-    python enviar_whatsapp.py
-
-La primera vez se abre Chrome y debes escanear el QR de WhatsApp Web.
-La sesión queda guardada en la carpeta "whatsapp_profile", así que las
-siguientes veces no necesitarás volver a escanear.
-"""
-
 import csv
 import os
 import random
@@ -19,9 +5,11 @@ import time
 from datetime import datetime
 from urllib.parse import quote
 
+from contactos import CONTACTOS
 from selenium import webdriver
 from selenium.common.exceptions import (
     NoAlertPresentException,
+    StaleElementReferenceException,
     TimeoutException,
     UnexpectedAlertPresentException,
 )
@@ -46,182 +34,182 @@ PAUSA_LOTE_MAX = 25
 # Intentos por contacto si el envío falla (no aplica a números inválidos)
 MAX_INTENTOS = 2
 
+# Segundos que la página debe permanecer sin recargarse antes de escribir/enviar
+ESTABILIDAD_SEGUNDOS = 3
+
 ARCHIVO_LOG = "log_envios.csv"
 CARPETA_PERFIL = os.path.join(os.getcwd(), "whatsapp_profile")
 
 # ----------------------------------------------------------------------
-# CONTACTOS (pega aquí el resto de tus contactos)
-# ----------------------------------------------------------------------
-CONTACTOS = [
-    {"nombre": "Renato Renzo Luna Herrera", "telefono": "984741614", "enlace": "https://invitacion-aniv.onrender.com/666ooo"},
-    {"nombre": "JAIME JUCULACA CHURA", "telefono": "921570164", "enlace": "https://invitacion-aniv.onrender.com/04WYd3"},
-    {"nombre": "JUAN ALBERTO HUARACHI PUMACHAPI", "telefono": "973784192", "enlace": "https://invitacion-aniv.onrender.com/0QdpMq"},
-    {"nombre": "JOSE SANTOS MAMANI CCANAHUIRE", "telefono": "944133665", "enlace": "https://invitacion-aniv.onrender.com/0emiL7"},
-    {"nombre": "GUINETTA YABAR HERRERA", "telefono": "973619361", "enlace": "https://invitacion-aniv.onrender.com/0izwRm"},
-    {"nombre": "LUZ MARLENY MEZA PUMAHUILLCA", "telefono": "935796328", "enlace": "https://invitacion-aniv.onrender.com/0uLjHV"},
-    {"nombre": "MARIA DEL CARMEN ANAYA JUCHARO", "telefono": "989411721", "enlace": "https://invitacion-aniv.onrender.com/0w2aRh"},
-    {"nombre": "GUINETTA YABAR HERRERA", "telefono": "973619361", "enlace": "https://invitacion-aniv.onrender.com/0zCpm4"},  # duplicado: se omite
-    {"nombre": "Alex Jaramillo Corrales", "telefono": "984747201", "enlace": "https://invitacion-aniv.onrender.com/14SLTB"},
-    {"nombre": "Mavel Sarmiento Huanca", "telefono": "984055039", "enlace": "https://invitacion-aniv.onrender.com/1CSLC9"},
-    {"nombre": "Danny Robert Moscoso Sanchez", "telefono": "974310648", "enlace": "https://invitacion-aniv.onrender.com/f82h4d"},
-    {"nombre": "Abel Rimasca Chacon", "telefono": "984895486", "enlace": "https://invitacion-aniv.onrender.com/1EMxKP"},
-    {"nombre": "Santiago Quispe Peralta", "telefono": "984851604", "enlace": "https://invitacion-aniv.onrender.com/1bM79c"},
-    {"nombre": "Karla Zavala Vargas", "telefono": "992428989", "enlace": "https://invitacion-aniv.onrender.com/1hRfUX"},
-]
-
-# ----------------------------------------------------------------------
 # MENSAJES  ({nombre} y {enlace} se reemplazan por los del contacto)
+# En WhatsApp la negrita se escribe con UN solo asterisco: *texto*
 # ----------------------------------------------------------------------
 MENSAJES = [
+
     # --- Mensaje 1 ---
+
     (
         "¡Hola, {nombre}! 👋✨\n"
         "\n"
         "Es un gusto saludarte. En el marco de la celebración de nuestro LXIX Aniversario "
         "Institucional y en homenaje al Señor de los Milagros 🙏🎉, la Gerencia Regional de "
-        "Salud Cusco y la Dirección Ejecutiva de Inteligencia Sanitaria tienen el honor de "
-        "invitarte cordialmente a acompañarnos en nuestras actividades conmemorativas.\n"
+        "Salud Cusco y la Dirección Ejecutiva de Inteligencia Sanitaria tienen el agrado de "
+        "invitarte a ser parte de esta celebración.\n"
         "\n"
-        "📅 Día Central: Miércoles, 7 de octubre\n"
-        "📍 Lugar del Almuerzo de Confraternidad: Centro de Convenciones \"Crystal Palace\" "
-        "(Av. Tomasa Ttito Condemayta N° 1875)\n"
-        "⏰ Hora: 13:30 hrs\n"
+        "🎊 Hemos preparado una jornada especial con actividades, música, reconocimientos "
+        "y momentos de confraternidad.\n"
         "\n"
-        "Será una excelente oportunidad para compartir un momento ameno de confraternidad, "
-        "disfrutar de nuestro programa musical 🎶, la entrega de premios 🏆 y rendir un "
-        "especial reconocimiento a nuestros compañeros.\n"
+        "🔗 *Guarda este enlace:* {enlace}\n"
+        "Aquí podrás consultar tu invitación oficial y el programa completo.\n"
         "\n"
-        "Puedes revisar el programa completo y tu invitación oficial en el siguiente enlace:\n"
-        "👉 {enlace}\n"
-        "\n"
-        "¡Contamos con tu grata presencia para celebrar juntos este aniversario! 🥂🎊\n"
-        "\n"
-        "Atentamente,\n"
-        "Gerencia Regional de Salud Cusco"
+        "¡Esperamos contar con tu grata presencia! 🥂🎉"
     ),
+
     # --- Mensaje 2 ---
+
     (
-        "¡Hola, {nombre}! 🌟✨\n"
+        "¡Hola, {nombre}! 🌟😊\n"
         "\n"
-        "Esperamos que te encuentres muy bien. Nos complace invitarte formalmente a las "
-        "actividades por nuestro LXIX Aniversario Institucional y el homenaje al Señor de los "
-        "Milagros 🙏, organizados por la Gerencia Regional de Salud Cusco y la Dirección "
-        "Ejecutiva de Inteligencia Sanitaria.\n"
+        "Queremos compartir contigo una invitación muy especial con motivo de nuestro "
+        "LXIX Aniversario Institucional y el homenaje al Señor de los Milagros 🙏✨.\n"
         "\n"
-        "Te esperamos en el Día Central:\n"
-        "📅 Fecha: Miércoles, 7 de octubre\n"
-        "📍 Almuerzo de Confraternidad: Centro de Convenciones \"Crystal Palace\" "
-        "(Av. Tomasa Ttito Condemayta N° 1875)\n"
-        "⏰ Hora: 13:30 hrs\n"
+        "La Gerencia Regional de Salud Cusco y la Dirección Ejecutiva de Inteligencia "
+        "Sanitaria te invitan cordialmente a acompañarnos en esta celebración. 🎉\n"
         "\n"
-        "Acompáñanos a disfrutar de nuestra ceremonia, momentos musicales 🎶, premiaciones 🏆 "
-        "y el merecido reconocimiento a la trayectoria de nuestro personal.\n"
+        "📲 *Importante: guarda tu enlace de invitación:* {enlace}\n"
+        "Desde allí podrás revisar tu invitación y conocer el programa de actividades.\n"
         "\n"
-        "📲 Revisa tu tarjeta de invitación y el programa detallado aquí:\n"
-        "👉 {enlace}\n"
-        "\n"
-        "¡Será un honor contar con tu presencia en este gran día! 🥂🎉"
+        "¡Será un gusto celebrar este día contigo! 🎊🥂"
     ),
+
     # --- Mensaje 3 ---
+
     (
         "¡Hola, {nombre}! 👋🎉\n"
         "\n"
-        "¡Llegó el momento de celebrar juntos! La Gerencia Regional de Salud Cusco y la "
-        "Dirección Ejecutiva de Inteligencia Sanitaria te invitan cordialmente a unirte a las "
-        "celebraciones por nuestro LXIX Aniversario Institucional y el tributo al Señor de los "
-        "Milagros 🙏✨.\n"
+        "¡Estamos de aniversario! 🎊 La Gerencia Regional de Salud Cusco y la Dirección "
+        "Ejecutiva de Inteligencia Sanitaria desean contar contigo en las actividades por "
+        "nuestro LXIX Aniversario Institucional, junto con el homenaje al Señor de los "
+        "Milagros. 🙏\n"
         "\n"
-        "Apunta los datos de nuestro Día Central:\n"
-        "🗓 Fecha: 7 de octubre\n"
-        "📍 Lugar: Centro de Convenciones \"Crystal Palace\" (Av. Tomasa Ttito Condemayta N° 1875)\n"
-        "🕐 Almuerzo de Confraternidad: 13:30 hrs\n"
+        "🎶 Disfrutaremos de música, reconocimientos, premiaciones 🏆 y un agradable "
+        "momento de confraternidad.\n"
         "\n"
-        "Hemos preparado una jornada muy especial con música en vivo 🎵, ceremonia de "
-        "reconocimientos y la entrega de premios de nuestras actividades institucionales 🏆🎊.\n"
+        "🔗 *Guarda tu enlace personal:* {enlace}\n"
+        "En él encontrarás tu invitación oficial y el programa completo.\n"
         "\n"
-        "Accede a todos los detalles de la invitación desde este enlace:\n"
-        "👉 {enlace}\n"
-        "\n"
-        "¡Tu asistencia le dará un realce especial a nuestra fiesta! 🍾🥳"
+        "¡Contamos contigo para celebrar juntos! 🥂✨"
     ),
+
     # --- Mensaje 4 ---
-    (
-        "Estimada {nombre}, recibes un cordial saludo 👋.\n"
-        "\n"
-        "En el marco de la conmemoración de nuestro LXIX Aniversario Institucional y rindiendo "
-        "homenaje al Señor de los Milagros 🙏, la Gerencia Regional de Salud Cusco junto a la "
-        "Dirección Ejecutiva de Inteligencia Sanitaria se complacen en invitarte a compartir "
-        "con nosotros esta importante fecha.\n"
-        "\n"
-        "📌 Coordenadas del Día Central:\n"
-        "📅 Fecha: 7 de octubre\n"
-        "📍 Almuerzo de Confraternidad: Centro de Convenciones \"Crystal Palace\" "
-        "(Av. Tomasa Ttito Condemayta N° 1875)\n"
-        "⏰ Hora: 13:30 hrs\n"
-        "\n"
-        "Ven a compartir un grato momento junto a todo el equipo, disfrutar del show "
-        "musical 🎷 y presenciar la entrega de reconocimientos y premios 🏅.\n"
-        "\n"
-        "Mira la tarjeta de invitación completa en el siguiente link:\n"
-        "👉 {enlace}\n"
-        "\n"
-        "¡Agradecemos de antemano tu gentil asistencia! 🥂✨"
-    ),
-    # --- Mensaje 5 ---
+
     (
         "¡Hola, {nombre}! ✨👋\n"
         "\n"
-        "¡Queremos invitarte a celebrar con nosotros! La Gerencia Regional de Salud Cusco y la "
-        "Dirección Ejecutiva de Inteligencia Sanitaria tienen el agrado de convocar a tu "
-        "presencia en las actividades de nuestro LXIX Aniversario Institucional y homenaje al "
-        "Señor de los Milagros 🙏🎊.\n"
+        "Con mucha alegría queremos invitarte a ser parte de las actividades conmemorativas "
+        "por el *LXIX Aniversario Institucional de la Gerencia Regional de Salud Cusco* "
+        "y el homenaje al Señor de los Milagros. 🙏🎉\n"
         "\n"
-        "Te esperamos en nuestro Día Central:\n"
-        "📅 Fecha: 7 de octubre\n"
-        "⏰ Hora: 13:30 hrs (Almuerzo de Confraternidad)\n"
-        "📍 Ubicación: Centro de Convenciones \"Crystal Palace\" (Av. Tomasa Ttito Condemayta N° 1875)\n"
+        "Será una ocasión especial para compartir, disfrutar de nuestro programa musical 🎶, "
+        "participar de las premiaciones 🏆 y reconocer a nuestros compañeros.\n"
         "\n"
-        "Contaremos con ambientación musical 🎶, entrega de premios deportivos y culturales 🏆, "
-        "y homenajes a nuestros colaboradores.\n"
+        "👉 *Guarda este enlace para acceder a tu invitación:* {enlace}\n"
+        "Allí encontrarás todos los detalles del programa.\n"
         "\n"
-        "Puedes visualizar el programa oficial ingresando aquí:\n"
-        "👉 {enlace}\n"
-        "\n"
-        "¡Esperamos poder celebrar este aniversario juntos! 🎉🥂"
+        "¡Nos encantará contar con tu presencia! 🎊"
     ),
-    # --- Mensaje 6 ---
+
+    # --- Mensaje 5 ---
+
     (
-        "¡Estimada {nombre}! 👋🏼🥳\n"
+        "¡Hola, {nombre}! 😊🎊\n"
         "\n"
-        "Es motivo de gran alegría ponernos en contacto contigo. Queremos invitarte a ser parte "
-        "de los festejos por el LXIX Aniversario Institucional de la Gerencia Regional de Salud "
-        "Cusco y la Dirección Ejecutiva de Inteligencia Sanitaria, así como del homenaje al "
-        "Señor de los Milagros 🙏✨.\n"
+        "La Gerencia Regional de Salud Cusco y la Dirección Ejecutiva de Inteligencia "
+        "Sanitaria tienen el agrado de hacerte llegar tu invitación por nuestro "
+        "*LXIX Aniversario Institucional*, en homenaje al Señor de los Milagros. 🙏✨\n"
         "\n"
-        "Unámonos en este día especial:\n"
-        "📅 Fecha Central: 7 de octubre\n"
-        "📍 Reunión/Almuerzo: Centro de Convenciones \"Crystal Palace\" "
-        "(Av. Tomasa Ttito Condemayta N° 1875)\n"
-        "🕐 Hora: 13:30 hrs\n"
+        "Hemos preparado una celebración para compartir juntos un momento de confraternidad, "
+        "música 🎵, premios 🏆 y reconocimientos especiales.\n"
         "\n"
-        "Será una reunión inolvidable donde compartiremos buena música 🎵, premiación a los "
-        "equipos ganadores 🥇 y la distinción a nuestros compañeros distinguidos.\n"
+        "🔗 *Guarda tu enlace de invitación:* {enlace}\n"
+        "Podrás ingresar nuevamente cuando quieras para revisar el programa completo.\n"
         "\n"
-        "Consulta la invitación digital en este enlace:\n"
-        "👉 {enlace}\n"
-        "\n"
-        "¡Contamos con tu compañía para hacer de este aniversario un evento memorable! 🥂🎊"
+        "¡Te esperamos para celebrar juntos este aniversario! 🎉🥂"
     ),
+
+    # --- Mensaje 6 ---
+
+    (
+        "¡Hola, {nombre}! 👋🌟\n"
+        "\n"
+        "Tenemos el gusto de invitarte a participar de la celebración por nuestro "
+        "*LXIX Aniversario Institucional* y del homenaje al Señor de los Milagros. "
+        "🙏🎉\n"
+        "\n"
+        "Será un momento especial para reencontrarnos, compartir en confraternidad y "
+        "disfrutar de las actividades preparadas para esta fecha. 🎶🏆🎊\n"
+        "\n"
+        "📌 *No olvides guardar este enlace:* {enlace}\n"
+        "Es tu acceso a la invitación oficial y al programa completo.\n"
+        "\n"
+        "¡Esperamos verte y celebrar juntos! 🥂✨"
+    ),
+
+    # --- Mensaje 7 ---
+
+    (
+        "¡Hola, {nombre}! 🙌✨\n"
+        "\n"
+        "Queremos hacerte llegar una cordial invitación para celebrar juntos el "
+        "*LXIX Aniversario Institucional de la Gerencia Regional de Salud Cusco*, "
+        "acompañando también el homenaje al Señor de los Milagros. 🙏🎉\n"
+        "\n"
+        "🎶 Tendremos una jornada especial con música, premiaciones 🏆, reconocimientos "
+        "y un espacio para compartir entre compañeros.\n"
+        "\n"
+        "🔗 *Guarda este enlace, será importante para ti:* {enlace}\n"
+        "Desde allí podrás consultar tu invitación y revisar el programa completo.\n"
+        "\n"
+        "¡Será un placer contar con tu presencia! 🎊🥂"
+    ),
+
 ]
 
 # ----------------------------------------------------------------------
-# UTILIDADES
+# SELECTORES (WhatsApp Web los cambia seguido; si algo falla, revisa aquí)
 # ----------------------------------------------------------------------
 XPATH_CHATS = '//div[@id="pane-side"]'
 XPATH_CAJA_MENSAJE = '//footer//div[@contenteditable="true"]'
 XPATH_POPUP = '//div[@data-animate-modal-popup="true"]'
+XPATH_BOTON_ENVIAR = (
+    '//footer//button[@aria-label="Enviar" or @aria-label="Send"]'
+    ' | //footer//span[contains(@data-icon,"send")]'
+)
+# Reloj de "pendiente" solo del ÚLTIMO mensaje enviado
+XPATH_PENDIENTE = (
+    '(//div[contains(@class,"message-out")])[last()]'
+    '//span[contains(@data-icon,"msg-time")]'
+)
+
+# Fragmentos (en minúscula) del popup de WhatsApp cuando el número no es válido
+TEXTOS_INVALIDO = (
+    "no es válido",
+    "no es valido",
+    "no está en whatsapp",
+    "no esta en whatsapp",
+    "no está registrado",
+    "invalid",
+    "not on whatsapp",
+    "isn't on whatsapp",
+)
+
+# Detalle devuelto cuando el número no tiene WhatsApp (no se reintenta)
+DETALLE_INVALIDO = "Número inválido o sin WhatsApp."
 
 
+# ----------------------------------------------------------------------
+# UTILIDADES
+# ----------------------------------------------------------------------
 def ahora():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -231,6 +219,10 @@ def limpiar_telefono(tel):
     if len(solo_digitos) == 9:
         solo_digitos = CODIGO_PAIS + solo_digitos
     return solo_digitos
+
+
+def telefono_valido(tel):
+    return tel.isdigit() and 10 <= len(tel) <= 15
 
 
 def quitar_duplicados(contactos):
@@ -290,6 +282,14 @@ def elegir_mensaje(ultimo_indice):
     return random.choice(opciones) if opciones else 0
 
 
+def formatear_nombre(nombre):
+    """Cada palabra con inicial mayúscula y el resto en minúscula."""
+    return " ".join(p.capitalize() for p in str(nombre).split())
+
+
+# ----------------------------------------------------------------------
+# NAVEGADOR
+# ----------------------------------------------------------------------
 def iniciar_navegador():
     opciones = webdriver.ChromeOptions()
     opciones.add_argument(f"--user-data-dir={CARPETA_PERFIL}")
@@ -313,6 +313,11 @@ def esperar_login(driver):
 
 
 def abrir_chat(driver, url):
+    # Evita el diálogo "¿Salir del sitio?" cuando queda un borrador escrito
+    try:
+        driver.execute_script("window.onbeforeunload = null;")
+    except Exception:
+        pass
     try:
         driver.get(url)
     except UnexpectedAlertPresentException:
@@ -323,10 +328,42 @@ def abrir_chat(driver, url):
         driver.get(url)
 
 
-XPATH_BOTON_ENVIAR = '//footer//span[@data-icon="send"]'
-XPATH_PENDIENTE = '//span[@data-icon="msg-time"]'
+def esperar_pagina_estable(driver, segundos=ESTABILIDAD_SEGUNDOS, maximo=60):
+    """
+    Espera la caja de texto (o el popup de error) y comprueba que la página
+    NO se recargue durante `segundos`. Devuelve "caja", "popup" o None.
+
+    Se usa una marca en window: si la página se recarga, la marca desaparece
+    y se vuelve a esperar. Así no se envía justo antes de una recarga.
+    """
+    fin = time.time() + maximo
+    while time.time() < fin:
+        try:
+            # 1) La caja de texto tiene prioridad: si existe, el chat cargó bien
+            if driver.find_elements(By.XPATH, XPATH_CAJA_MENSAJE):
+                driver.execute_script("window.__bot_marca = true;")
+                time.sleep(segundos)
+                sigue = driver.execute_script("return window.__bot_marca === true;")
+                if sigue and driver.find_elements(By.XPATH, XPATH_CAJA_MENSAJE):
+                    return "caja"
+                # La marca desapareció: la página se recargó, se vuelve a esperar
+                continue
+
+            # 2) Un popup solo cuenta como error si su texto indica número inválido.
+            #    Otros popups (p. ej. "Iniciando chat...") se ignoran y se sigue esperando.
+            for popup in driver.find_elements(By.XPATH, XPATH_POPUP):
+                texto_popup = popup.text.lower()
+                if any(k in texto_popup for k in TEXTOS_INVALIDO):
+                    return "popup"
+        except Exception:
+            pass
+        time.sleep(0.5)
+    return None
 
 
+# ----------------------------------------------------------------------
+# ENVÍO
+# ----------------------------------------------------------------------
 def obtener_caja(driver):
     cajas = driver.find_elements(By.XPATH, XPATH_CAJA_MENSAJE)
     return cajas[0] if cajas else None
@@ -361,8 +398,10 @@ def intentar_enviar(driver):
         try:
             caja = obtener_caja(driver)
             if caja is None:
-                break
+                time.sleep(1)
+                continue
             if intento == 1:
+                caja.click()
                 caja.send_keys(Keys.ENTER)
             else:
                 botones = driver.find_elements(By.XPATH, XPATH_BOTON_ENVIAR)
@@ -370,6 +409,9 @@ def intentar_enviar(driver):
                     driver.execute_script("arguments[0].click();", botones[0])
                 else:
                     caja.send_keys(Keys.ENTER)
+        except StaleElementReferenceException:
+            time.sleep(1)
+            continue
         except Exception:
             pass
 
@@ -382,7 +424,7 @@ def intentar_enviar(driver):
 
 
 def esperar_confirmacion(driver, maximo=12):
-    """Espera a que el mensaje deje de estar 'pendiente' (reloj) antes de cambiar de chat."""
+    """Espera a que el último mensaje deje de estar 'pendiente' (reloj) antes de cambiar de chat."""
     time.sleep(1)
     fin = time.time() + maximo
     while time.time() < fin:
@@ -397,21 +439,12 @@ def enviar_mensaje(driver, telefono, texto):
     url = f"https://web.whatsapp.com/send?phone={telefono}&text={quote(texto)}"
     abrir_chat(driver, url)
 
-    # Esperar a que aparezca la caja de texto o un aviso de error
-    def listo(d):
-        if d.find_elements(By.XPATH, XPATH_CAJA_MENSAJE):
-            return "caja"
-        if d.find_elements(By.XPATH, XPATH_POPUP):
-            return "popup"
-        return False
-
-    try:
-        resultado = WebDriverWait(driver, 45).until(listo)
-    except TimeoutException:
+    # Esperar caja de texto estable (sin recargas) o aviso de error
+    resultado = esperar_pagina_estable(driver)
+    if resultado is None:
         return False, "Tiempo agotado: el chat no cargó (¿sin internet?)."
-
     if resultado == "popup":
-        return False, "Número inválido o sin WhatsApp."
+        return False, DETALLE_INVALIDO
 
     # Esperar a que el texto precargado aparezca en la caja
     fin = time.time() + 10
@@ -429,11 +462,6 @@ def enviar_mensaje(driver, telefono, texto):
     if not esperar_confirmacion(driver):
         return True, "Enviado, pero sin confirmar entrega (revisa tu internet)."
     return True, "Mensaje enviado."
-
-
-def formatear_nombre(nombre):
-    """Cada palabra con inicial mayúscula y el resto en minúscula."""
-    return " ".join(p.capitalize() for p in str(nombre).split())
 
 
 # ----------------------------------------------------------------------
@@ -463,6 +491,12 @@ def main():
             nombre = formatear_nombre(c["nombre"])
             telefono = limpiar_telefono(c["telefono"])
 
+            if not telefono_valido(telefono):
+                fallidos += 1
+                print(f"[{i}/{len(pendientes)}] ❌ Teléfono con formato inválido: {nombre} ({telefono})")
+                escribir_log(nombre, telefono, "FALLIDO", "Teléfono con formato inválido.")
+                continue
+
             ultimo_indice = elegir_mensaje(ultimo_indice)
             texto = MENSAJES[ultimo_indice].format(nombre=nombre, enlace=c["enlace"])
 
@@ -473,7 +507,7 @@ def main():
                     ok, detalle = enviar_mensaje(driver, telefono, texto)
                 except Exception as e:
                     ok, detalle = False, f"Error inesperado: {type(e).__name__}: {e}"
-                if ok or "inválido" in detalle:
+                if ok or detalle == DETALLE_INVALIDO:
                     break
                 if intento < MAX_INTENTOS:
                     print(f"   ↻ Falló ({detalle}) Reintentando...")
